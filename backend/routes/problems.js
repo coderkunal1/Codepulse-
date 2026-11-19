@@ -6,9 +6,7 @@ const { authenticateToken, isAdmin } = require('../middleware/auth');
 // Get all problems
 router.get('/', async (req, res) => {
     try {
-        const problems = await Problem.findAll({
-            attributes: ['id', 'title', 'difficulty']
-        });
+        const problems = await Problem.findAll();
         res.json(problems);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -29,9 +27,9 @@ router.get('/:id', async (req, res) => {
 // Create problem (Admin only)
 router.post('/', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const { title, description, input_format, output_format, sample_input, sample_output, difficulty } = req.body;
+        const { title, description, input_format, output_format, sample_input, sample_output, difficulty, is_premium, company_tags, frequency } = req.body;
         const newProblem = await Problem.create({
-            title, description, input_format, output_format, sample_input, sample_output, difficulty
+            title, description, input_format, output_format, sample_input, sample_output, difficulty, is_premium, company_tags, frequency
         });
         res.status(201).json({ message: "Problem created successfully", id: newProblem.id });
     } catch (error) {

@@ -3,9 +3,21 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
+const { authLimiter } = require('../middleware/rateLimiter');
+const { body, validationResult } = require('express-validator');
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, [
+    body('email').isEmail().withMessage('Enter a valid email'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('name').notEmpty().withMessage('Name is required')
+], async (req, res) => {
+    // Check validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
     try {
         const { name, email, password, role } = req.body;
 
@@ -16,12 +28,17 @@ router.post('/register', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const userRole = role || 'user';
 
-        await User.create({
+        const user = await User.create({
             name,
             email,
             password: hashedPassword,
             role: userRole
         });
+
+        // CE-02 Syllabus L55-59: Send Welcome Email
+        // We don't 'await' it to keep registration fast (runs in background)
+        const { sendWelcomeEmail } = require('../utils/mailer');
+        sendWelcomeEmail(email, name);
 
         res.status(201).json({ message: "User registered successfully" });
     } catch (error) {
@@ -31,7 +48,16 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, [
+    body('email').isEmail().withMessage('Enter a valid email'),
+    body('password').notEmpty().withMessage('Password is required')
+], async (req, res) => {
+    // Check validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
     try {
         const { email, password } = req.body;
         const user = await User.findOne({ where: { email } });

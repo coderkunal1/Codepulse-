@@ -21,7 +21,7 @@ router.get('/stats', authenticateToken, isAdmin, async (req, res) => {
 
         // Recent Submissions
         const recentSubmissions = await Submission.findAll({
-            limit: 5,
+            limit: 20,
             order: [['created_at', 'DESC']],
             include: [
                 { model: User, attributes: ['name'] },

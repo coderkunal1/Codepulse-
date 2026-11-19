@@ -14,7 +14,10 @@ const ManageProblem = () => {
         input_format: '',
         output_format: '',
         sample_input: '',
-        sample_output: ''
+        sample_output: '',
+        is_premium: false,
+        company_tags: '',
+        frequency: 0
     });
     const [loading, setLoading] = useState(false);
 
@@ -28,7 +31,8 @@ const ManageProblem = () => {
     }, [id]);
 
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value, type, checked } = e.target;
+        setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
     };
 
     const handleSubmit = async (e) => {
@@ -75,7 +79,24 @@ const ManageProblem = () => {
                                 <option value="Hard">Hard</option>
                             </select>
                         </div>
+                        <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '25px' }}>
+                            <input type="checkbox" name="is_premium" checked={formData.is_premium} onChange={handleChange} style={{ width: '20px', height: '20px' }} />
+                            <label style={{ margin: 0, color: '#f59e0b', fontWeight: 'bold' }}>Is Premium Challenge? ✨</label>
+                        </div>
                     </div>
+
+                    {formData.is_premium && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', background: 'rgba(245, 158, 11, 0.05)', padding: '20px', borderRadius: '15px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                            <div className="input-group">
+                                <label style={{ color: '#fcd34d' }}>Company Tags (Comma separated)</label>
+                                <input name="company_tags" value={formData.company_tags} onChange={handleChange} placeholder="e.g. Google, Amazon, Meta" />
+                            </div>
+                            <div className="input-group">
+                                <label style={{ color: '#ef4444' }}>Interview Frequency (%)</label>
+                                <input type="number" name="frequency" value={formData.frequency} onChange={handleChange} placeholder="e.g. 95" min="0" max="100" />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="input-group">
                         <label>Description</label>

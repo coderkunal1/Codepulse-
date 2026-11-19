@@ -52,6 +52,8 @@ const Navbar = () => {
 
                 <div className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     <NavLink to="/problems" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Problems</NavLink>
+                    <NavLink to="/interview-prep" className={({ isActive }) => isActive ? 'nav-link active premium-link' : 'nav-link premium-link'} style={{ color: '#f59e0b', fontWeight: 'bold' }}>Interview Prep ✨</NavLink>
+                    <NavLink to="/contests" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Contests</NavLink>
                     {user && <NavLink to="/submissions" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>History</NavLink>}
                     {user?.role === 'admin' && (
                         <NavLink to="/admin" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -68,10 +70,14 @@ const Navbar = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     {user ? (
                         <>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6366f1', background: 'rgba(99, 102, 241, 0.1)', padding: '5px 12px', borderRadius: '20px' }}>
-                                <UserIcon size={16} />
+                            <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6366f1', background: 'rgba(99, 102, 241, 0.1)', padding: '5px 12px', borderRadius: '20px', textDecoration: 'none' }}>
+                                {user.profile_pic ? (
+                                    <img src={user.profile_pic} alt="Avatar" style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} />
+                                ) : (
+                                    <UserIcon size={16} />
+                                )}
                                 <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{user.name}</span>
-                            </div>
+                            </Link>
                             <button onClick={handleLogout} className="btn-secondary" style={{ padding: '8px 16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <LogOut size={16} /> Logout
                             </button>

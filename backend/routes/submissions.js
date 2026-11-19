@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const { Problem, Submission } = require('../models');
+const { Problem, Submission, TestCase } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 
 const LANGUAGE_MAP = {
@@ -38,6 +38,15 @@ router.post('/submit', authenticateToken, async (req, res) => {
         await delay(300);
 
         let resultOutput, resultStatus, resultStdout, resultStderr;
+        let rawTestResults = [];
+
+        const testCases = await TestCase.findAll({ where: { problem_id } });
+        // Fallback if no testcases exist in DB
+        const casesToRun = testCases.length > 0 ? testCases : [{
+            input: problem.sample_input || "",
+            expected_output: problem.sample_output || "",
+            is_hidden: false
+        }];
 
         if (!process.env.JUDGE0_API_KEY) {
             const fs = require('fs');
@@ -49,49 +58,161 @@ router.post('/submit', authenticateToken, async (req, res) => {
             log(`📁 Created Sandbox: ${path.basename(tmpDir)}`);
             await delay(300);
             
-            let stdout = "", stderr = "", execStatus = 0;
-            const input = problem.sample_input || "";
+            let execStatus = 0;
+            let finalResultStatus = 'Accepted';
             
             try {
+                // Compilation Phase
+                let exePath = '';
+                let pythonPath = '';
+                let javaClass = '';
+                
                 if (language === 'java') {
                     log('💾 Writing Java source file...');
                     const match = code.match(/class\s+([A-Za-z0-9_]+)/);
-                    const className = match ? match[1] : 'Main';
-                    const file = path.join(tmpDir, `${className}.java`);
+                    javaClass = match ? match[1] : 'Main';
+                    const file = path.join(tmpDir, `${javaClass}.java`);
                     fs.writeFileSync(file, code);
-                    log('⚙️ Compiling and Running Java Binary...');
+                    log('⚙️ Compiling Java Binary...');
                     await delay(500);
-                    stdout = execSync(`java "${file}"`, { input, timeout: 8000, encoding: 'utf-8' });
+                    execSync(`javac "${file}"`, { timeout: 8000, encoding: 'utf-8' });
                 } else if (language === 'python') {
                     log('💾 Writing Python script...');
                     const file = path.join(tmpDir, 'script.py');
-                    fs.writeFileSync(file, code);
-                    const pythonBin = fs.existsSync('C:\\Users\\hp\\AppData\\Local\\Programs\\Python\\Python311\\python.exe') ? 
-                        '"C:\\Users\\hp\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"' : 'python';
-                    log('⚙️ Executing Python virtual machine...');
-                    await delay(500);
-                    stdout = execSync(`${pythonBin} "${file}"`, { input, timeout: 5000, encoding: 'utf-8' });
+                    const pythonCode = `import json\nnull = None\ntrue = True\nfalse = False\n\n` + code;
+                    fs.writeFileSync(file, pythonCode);
+                    // Detect Python from common install locations
+                    const pythonCandidates = [
+                        'C:\\Python314\\python.exe',
+                        'C:\\Python313\\python.exe',
+                        'C:\\Python312\\python.exe',
+                        'C:\\Python311\\python.exe',
+                        'C:\\Python310\\python.exe',
+                        `C:\\Users\\${require('os').userInfo().username}\\AppData\\Local\\Programs\\Python\\Python314\\python.exe`,
+                        `C:\\Users\\${require('os').userInfo().username}\\AppData\\Local\\Programs\\Python\\Python313\\python.exe`,
+                        `C:\\Users\\${require('os').userInfo().username}\\AppData\\Local\\Programs\\Python\\Python312\\python.exe`,
+                        `C:\\Users\\${require('os').userInfo().username}\\AppData\\Local\\Programs\\Python\\Python311\\python.exe`,
+                        `C:\\Users\\${require('os').userInfo().username}\\AppData\\Local\\Programs\\Python\\Python310\\python.exe`,
+                    ];
+                    const foundPython = pythonCandidates.find(p => fs.existsSync(p));
+                    pythonPath = foundPython ? `"${foundPython}"` : 'python';
                 } else if (language === 'cpp') {
                     log('💾 Writing C++ script...');
                     const file = path.join(tmpDir, 'main.cpp');
-                    const exe = path.join(tmpDir, 'a.exe');
+                    exePath = path.join(tmpDir, 'a.exe');
                     fs.writeFileSync(file, code);
-                    const cppBin = fs.existsSync('C:\\Users\\hp\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\g++.exe') ? 
-                        '"C:\\Users\\hp\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\g++.exe"' : 'g++';
+                    // Detect g++ from common MinGW install locations
+                    const username = require('os').userInfo().username;
+                    const gppCandidates = [
+                        `C:\\Users\\${username}\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\g++.exe`,
+                        `C:\\Users\\${username}\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\g++.exe`,
+                        'C:\\MinGW\\bin\\g++.exe',
+                        'C:\\mingw64\\bin\\g++.exe',
+                        'C:\\msys64\\mingw64\\bin\\g++.exe',
+                        'C:\\Program Files\\mingw-w64\\x86_64-8.1.0-posix-seh-rt_v6-rev0\\mingw64\\bin\\g++.exe',
+                    ];
+                    const foundGpp = gppCandidates.find(p => fs.existsSync(p));
+                    const cppBin = foundGpp ? `"${foundGpp}"` : 'g++';
                     log('⚙️ Linking Native Binary with g++...');
                     await delay(500);
-                    execSync(`${cppBin} "${file}" -o "${exe}"`, { timeout: 10000, encoding: 'utf-8' });
-                    log('⚙️ Executing Native Binary...');
-                    await delay(300);
-                    stdout = execSync(`"${exe}"`, { input, timeout: 5000, encoding: 'utf-8' });
+                    execSync(`${cppBin} "${file}" -o "${exePath}"`, { timeout: 10000, encoding: 'utf-8' });
                 }
-                log('✅ Output captured successfully.');
+
+                // Execution Phase
+                log(`🏃 Running ${casesToRun.length} testcase(s)...`);
+                for (let i = 0; i < casesToRun.length; i++) {
+                    const tc = casesToRun[i];
+                    let tcStdout = "";
+                    let tcStderr = "";
+                    try {
+                        let cmd = '';
+                        if (language === 'java') {
+                            cmd = `java -cp "${tmpDir}" ${javaClass}`;
+                        } else if (language === 'python') {
+                            cmd = `${pythonPath} "${path.join(tmpDir, 'script.py')}"`;
+                        } else if (language === 'cpp') {
+                            cmd = `"${exePath}"`;
+                        }
+                        tcStdout = execSync(cmd, { input: tc.input, timeout: 5000, encoding: 'utf-8' });
+                    } catch (e) {
+                        tcStderr = e.stderr ? e.stderr.toString() : e.message;
+                        execStatus = e.status || 1;
+                    }
+                    
+                    const normalizeOutput = (str) => {
+                        let s = str.replace(/\s+/g, "");
+                        if (language === 'python') {
+                            s = s.replace(/None/g, "null");
+                            s = s.replace(/True/g, "true");
+                            s = s.replace(/False/g, "false");
+                            s = s.replace(/'/g, '"');
+                        }
+                        return s;
+                    };
+                    const actual = tcStdout.trim();
+                    const expected = (tc.expected_output || "").trim();
+                    const passed = (execStatus === 0) && (normalizeOutput(actual) === normalizeOutput(expected));
+                    
+                    rawTestResults.push({
+                        id: i + 1,
+                        is_hidden: tc.is_hidden,
+                        passed: passed,
+                        status: execStatus !== 0 ? 'Compilation/Runtime Error' : (passed ? 'Accepted' : 'Wrong Answer'),
+                        input: tc.input,
+                        expected_output: tc.expected_output,
+                        actual_output: tcStdout,
+                        error: tcStderr
+                    });
+
+                    if (execStatus !== 0) {
+                        resultStderr = tcStderr;
+                        resultOutput = tcStderr;
+                        finalResultStatus = 'Compilation/Runtime Error';
+                    } else if (!passed) {
+                        if (tc.is_hidden) {
+                            finalResultStatus = 'Hidden Test Case Failed';
+                        } else {
+                            finalResultStatus = `Wrong Answer on Testcase ${i + 1}`;
+                        }
+                        resultStdout = tcStdout;
+                        resultOutput = tcStdout;
+                    }
+                    
+                    if (execStatus !== 0 || !passed) {
+                        // Mark remaining cases as Skipped
+                        for (let j = i + 1; j < casesToRun.length; j++) {
+                            const skippedTc = casesToRun[j];
+                            rawTestResults.push({
+                                id: j + 1,
+                                is_hidden: skippedTc.is_hidden,
+                                passed: false,
+                                status: 'Skipped',
+                                input: skippedTc.input,
+                                expected_output: skippedTc.expected_output,
+                                actual_output: '',
+                                error: ''
+                            });
+                        }
+                        break;
+                    }
+                    
+                    if (i === casesToRun.length - 1) {
+                        resultStdout = tcStdout;
+                        resultOutput = tcStdout;
+                    }
+                }
+                
+                resultStatus = finalResultStatus;
+                if (resultStatus === 'Accepted') {
+                    log('✅ All testcases passed successfully!');
+                }
+
             } catch (e) {
                 log('❌ Runtime exception detected.');
-                stderr = e.stderr ? e.stderr.toString() : e.message;
-                execStatus = e.status || 1;
+                resultStderr = e.stderr ? e.stderr.toString() : e.message;
+                resultOutput = resultStderr;
+                resultStatus = 'Compilation/Runtime Error';
             } finally {
-                // Cleanup! 
                 try {
                     fs.rmSync(tmpDir, { recursive: true, force: true });
                     log(`🧹 Sandbox ${path.basename(tmpDir)} cleaned up.`);
@@ -99,54 +220,85 @@ router.post('/submit', authenticateToken, async (req, res) => {
                     console.error('Failed to cleanup tmpDir:', err);
                 }
             }
+        } else {
+            // Judge0 Path with multiple testcases
+            log('⚡ Forwarding to Judge0 Remote Worker...');
+            let finalResultStatus = 'Accepted';
             
-            resultStderr = stderr;
-            resultStdout = stdout;
-            resultOutput = stdout || stderr;
-            
-            if (execStatus !== 0) {
-                resultStatus = 'Compilation/Runtime Error';
-            } else {
-                log('🧠 Validating output against testcases...');
-                await delay(400);
-                const expected = (problem.sample_output || "").trim();
-                const actual = stdout.trim();
-                const normalizeOutput = (str) => str.replace(/\s+/g, "");
+            for (let i = 0; i < casesToRun.length; i++) {
+                const tc = casesToRun[i];
+                const options = {
+                    method: 'POST',
+                    url: `${process.env.JUDGE0_API_URL}/submissions`,
+                    params: { base64_encoded: 'true', wait: 'true' },
+                    headers: {
+                        'content-type': 'application/json',
+                        'X-RapidAPI-Key': process.env.JUDGE0_API_KEY,
+                        'X-RapidAPI-Host': new URL(process.env.JUDGE0_API_URL).hostname
+                    },
+                    data: {
+                        language_id: language_id,
+                        source_code: Buffer.from(code).toString('base64'),
+                        stdin: Buffer.from(tc.input || "").toString('base64'),
+                        expected_output: Buffer.from(tc.expected_output || "").toString('base64')
+                    }
+                };
+
+                const response = await axios.request(options);
+                const { stdout, stderr, status, compile_output } = response.data;
                 
-                if (normalizeOutput(actual) === normalizeOutput(expected)) {
-                    resultStatus = 'Accepted';
-                } else {
-                    resultStatus = 'Wrong Answer';
+                const currentStatus = status.description;
+                const passed = currentStatus === 'Accepted';
+                
+                const decStdout = stdout ? Buffer.from(stdout, 'base64').toString() : "";
+                const decStderr = stderr ? Buffer.from(stderr, 'base64').toString() : "";
+                const decCompile = compile_output ? Buffer.from(compile_output, 'base64').toString() : "";
+                
+                rawTestResults.push({
+                    id: i + 1,
+                    is_hidden: tc.is_hidden,
+                    passed: passed,
+                    status: currentStatus,
+                    input: tc.input,
+                    expected_output: tc.expected_output,
+                    actual_output: decStdout,
+                    error: decStderr || decCompile
+                });
+
+                if (!passed) {
+                    if (tc.is_hidden) {
+                        finalResultStatus = 'Hidden Test Case Failed';
+                    } else {
+                        finalResultStatus = currentStatus;
+                    }
+                    resultStdout = decStdout || null;
+                    resultStderr = decStderr || null;
+                    resultOutput = decStdout ? decStdout : (decStderr ? decStderr : decCompile);
+                    
+                    for (let j = i + 1; j < casesToRun.length; j++) {
+                        const skippedTc = casesToRun[j];
+                        rawTestResults.push({
+                            id: j + 1,
+                            is_hidden: skippedTc.is_hidden,
+                            passed: false,
+                            status: 'Skipped',
+                            input: skippedTc.input,
+                            expected_output: skippedTc.expected_output,
+                            actual_output: '',
+                            error: ''
+                        });
+                    }
+                    break;
+                }
+                
+                if (i === casesToRun.length - 1) {
+                    resultStdout = decStdout || null;
+                    resultStderr = null;
+                    resultOutput = resultStdout;
                 }
             }
-        } else {
-            // Judge0 Path (simulated logs)
-            log('⚡ Forwarding to Judge0 Remote Worker...');
-            const options = {
-                method: 'POST',
-                url: `${process.env.JUDGE0_API_URL}/submissions`,
-                params: { base64_encoded: 'true', wait: 'true' },
-                headers: {
-                    'content-type': 'application/json',
-                    'X-RapidAPI-Key': process.env.JUDGE0_API_KEY,
-                    'X-RapidAPI-Host': new URL(process.env.JUDGE0_API_URL).hostname
-                },
-                data: {
-                    language_id: language_id,
-                    source_code: Buffer.from(code).toString('base64'),
-                    stdin: Buffer.from(problem.sample_input || "").toString('base64'),
-                    expected_output: Buffer.from(problem.sample_output || "").toString('base64')
-                }
-            };
-
-            const response = await axios.request(options);
             log('✅ Response received from Judge0.');
-            const { stdout, stderr, status, compile_output } = response.data;
-
-            resultStdout = stdout ? Buffer.from(stdout, 'base64').toString() : null;
-            resultStderr = stderr ? Buffer.from(stderr, 'base64').toString() : null;
-            resultOutput = stdout ? Buffer.from(stdout, 'base64').toString() : (stderr ? Buffer.from(stderr, 'base64').toString() : Buffer.from(compile_output || "", 'base64').toString());
-            resultStatus = status.description;
+            resultStatus = finalResultStatus;
         }
 
         // Save submission 
@@ -156,7 +308,8 @@ router.post('/submit', authenticateToken, async (req, res) => {
             code,
             language,
             output: resultOutput,
-            status: resultStatus
+            status: resultStatus,
+            test_results: JSON.stringify(rawTestResults)
         });
 
         // Emit final status
@@ -184,7 +337,8 @@ router.post('/submit', authenticateToken, async (req, res) => {
             output: resultOutput,
             status: resultStatus,
             stdout: resultStdout,
-            stderr: resultStderr
+            stderr: resultStderr,
+            testResults: rawTestResults
         });
 
     } catch (error) {

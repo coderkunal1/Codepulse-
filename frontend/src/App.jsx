@@ -9,6 +9,10 @@ import ProblemDetail from './pages/ProblemDetail';
 import Submissions from './pages/Submissions';
 import AdminDashboard from './pages/AdminDashboard';
 import ManageProblem from './pages/ManageProblem';
+import ManageContest from './pages/ManageContest';
+import InterviewPrep from './pages/InterviewPrep';
+import Contests from './pages/Contests';
+import Profile from './pages/Profile';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -42,6 +46,10 @@ function App() {
               <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
               <Route path="/admin/problems/new" element={<AdminRoute><ManageProblem /></AdminRoute>} />
               <Route path="/admin/problems/edit/:id" element={<AdminRoute><ManageProblem /></AdminRoute>} />
+              <Route path="/admin/contests/new" element={<AdminRoute><ManageContest /></AdminRoute>} />
+              <Route path="/interview-prep" element={<PrivateRoute><InterviewPrep /></PrivateRoute>} />
+              <Route path="/contests" element={<PrivateRoute><Contests /></PrivateRoute>} />
+              <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
             </Routes>
           </main>
           <ToastContainer position="bottom-right" theme="dark" />

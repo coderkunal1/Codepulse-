@@ -4,6 +4,8 @@ const dotenv = require('dotenv');
 const http = require('http');
 const { Server } = require('socket.io');
 const { sequelize } = require('./models');
+const { graphqlHTTP } = require('express-graphql');
+const schema = require('./graphql/schema');
 
 dotenv.config();
 
@@ -11,13 +13,21 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+        origin: ['http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174'],
         methods: ['GET', 'POST']
     }
 });
 
 app.use(cors());
 app.use(express.json());
+
+// Import Security Middleware
+const securityMiddleware = require('./middleware/security');
+const { apiLimiter } = require('./middleware/rateLimiter');
+
+// Apply Global Security
+securityMiddleware(app);
+app.use('/api', apiLimiter); // Apply rate limit to all API routes
 
 const jwt = require('jsonwebtoken');
 
@@ -54,7 +64,7 @@ io.on('connection', (socket) => {
     };
 
     updateCount();
-    
+
     // If authenticated, join user-specific room
     if (socket.user) {
         socket.join(`user_${socket.user.id}`);
@@ -76,11 +86,21 @@ const authRoutes = require('./routes/auth');
 const problemRoutes = require('./routes/problems');
 const submissionRoutes = require('./routes/submissions');
 const adminRoutes = require('./routes/admin');
+// const profileRoutes = require('./routes/profile'); // Uncomment after installing cloudinary packages
 
 app.use('/api', authRoutes);
 app.use('/api/problems', problemRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/admin', adminRoutes);
+
+// GraphQL Endpoint (Syllabus Lecture 36-40)
+app.use('/graphql', graphqlHTTP({
+    schema,
+    graphiql: true
+}));
+
+const profileRoutes = require('./routes/profile');
+app.use('/api/profile', profileRoutes);
 
 const PORT = process.env.PORT || 5000;
 

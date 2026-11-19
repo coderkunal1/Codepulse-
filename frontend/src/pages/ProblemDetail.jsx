@@ -16,6 +16,8 @@ const ProblemDetail = () => {
     const [result, setResult] = useState(null);
     const [logs, setLogs] = useState([]);
     const [error, setError] = useState(null);
+    const [activeTab, setActiveTab] = useState('testcases');
+    const [selectedTestCase, setSelectedTestCase] = useState(0);
 
     useEffect(() => {
         let newSocket;
@@ -53,6 +55,8 @@ const ProblemDetail = () => {
         setExecuting(true);
         setResult(null);
         setLogs([]); // Clear logs for new run
+        setActiveTab('testcases');
+        setSelectedTestCase(0);
         try {
             const res = await api.post('/submissions/submit', {
                 problem_id: id,
@@ -161,58 +165,124 @@ const ProblemDetail = () => {
                         />
                     </div>
 
-                    {/* LIVE TERMINAL LOGS */}
-                    {(executing || logs.length > 0) && (
-                        <div className="glass-card" style={{ marginTop: '20px', background: '#020617', border: '1px solid #1e293b', padding: '15px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', borderBottom: '1px solid #334155', paddingBottom: '10px' }}>
-                                <Activity size={18} color="#38bdf8" className={executing ? 'animate-pulse' : ''} />
-                                <span style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, letterSpacing: '1px' }}>SYSTEM EXECUTION LOGS</span>
-                            </div>
-                            <div style={{ maxHeight: '150px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                                {logs.map((log, i) => (
-                                    <div key={i} style={{ marginBottom: '6px', color: log.message.startsWith('❌') ? '#fca5a5' : log.message.startsWith('✅') ? '#86efac' : '#cbd5e1' }}>
-                                        <span style={{ color: '#64748b', marginRight: '10px' }}>[{log.time}]</span>
-                                        {log.message}
-                                    </div>
-                                ))}
-                                {executing && <div style={{ color: '#38bdf8', marginTop: '10px' }}>▋ Processing...</div>}
-                            </div>
-                        </div>
-                    )}
+                    {/* Tabs */}
+                    <div style={{ marginTop: '20px', display: 'flex', gap: '10px', borderBottom: '1px solid #1e293b', paddingBottom: '10px' }}>
+                        <button 
+                            onClick={() => setActiveTab('testcases')}
+                            style={{ background: 'none', border: 'none', color: activeTab === 'testcases' ? '#fff' : '#64748b', fontSize: '1rem', cursor: 'pointer', padding: '5px 10px', borderBottom: activeTab === 'testcases' ? '2px solid #6366f1' : '2px solid transparent' }}
+                        >
+                            Test cases
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('console')}
+                            style={{ background: 'none', border: 'none', color: activeTab === 'console' ? '#fff' : '#64748b', fontSize: '1rem', cursor: 'pointer', padding: '5px 10px', borderBottom: activeTab === 'console' ? '2px solid #6366f1' : '2px solid transparent' }}
+                        >
+                            Console
+                        </button>
+                    </div>
 
-                    {result && (
-                        <div className="glass-card" style={{ marginTop: '20px', background: result.status === 'Accepted' ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-                                {result.status === 'Accepted' ? <CheckCircle2 color="#10b981" /> : <XCircle color="#ef4444" />}
-                                <h3 style={{ color: result.status === 'Accepted' ? '#10b981' : '#ef4444' }}>{result.status}</h3>
-                            </div>
-
-                            {result.stdout && (
-                                <div style={{ marginBottom: '15px' }}>
-                                    <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '5px' }}>Your Output:</p>
-                                    <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '4px', fontSize: '0.9rem' }}>{result.stdout}</pre>
+                    {/* Tab Content */}
+                    <div className="glass-card" style={{ marginTop: '10px', padding: '0', background: '#020617', border: '1px solid #1e293b' }}>
+                        {activeTab === 'console' && (
+                            <div style={{ padding: '15px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', borderBottom: '1px solid #334155', paddingBottom: '10px' }}>
+                                    <Activity size={18} color="#38bdf8" className={executing ? 'animate-pulse' : ''} />
+                                    <span style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, letterSpacing: '1px' }}>SYSTEM EXECUTION LOGS</span>
                                 </div>
-                            )}
-
-                            {result.stderr && (
-                                <div>
-                                    <p style={{ fontSize: '0.8rem', color: '#ef4444', marginBottom: '5px' }}>Error Details:</p>
-                                    <pre style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '4px', fontSize: '0.85rem', color: '#fca5a5' }}>{result.stderr}</pre>
+                                <div style={{ maxHeight: '250px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                                    {logs.map((log, i) => (
+                                        <div key={i} style={{ marginBottom: '6px', color: log.message.startsWith('❌') ? '#fca5a5' : log.message.startsWith('✅') ? '#86efac' : '#cbd5e1' }}>
+                                            <span style={{ color: '#64748b', marginRight: '10px' }}>[{log.time}]</span>
+                                            {log.message}
+                                        </div>
+                                    ))}
+                                    {executing && <div style={{ color: '#38bdf8', marginTop: '10px' }}>▋ Processing...</div>}
+                                    {!executing && logs.length === 0 && <span style={{ color: '#64748b' }}>No logs yet.</span>}
                                 </div>
-                            )}
+                            </div>
+                        )}
 
-                            {!result.stdout && !result.stderr && result.output && (
-                                <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '4px', fontSize: '0.9rem' }}>{result.output}</pre>
-                            )}
-                        </div>
-                    )}
-
-                    {!result && !executing && logs.length === 0 && (
-                        <div className="glass-card" style={{ marginTop: '20px', textAlign: 'center', color: '#64748b' }}>
-                            <Info size={24} style={{ marginBottom: '10px' }} />
-                            <p>Run your code to see the results here.</p>
-                        </div>
-                    )}
+                        {activeTab === 'testcases' && (
+                            <div style={{ display: 'flex', minHeight: '300px' }}>
+                                {/* Sidebar */}
+                                <div style={{ width: '200px', borderRight: '1px solid #1e293b', padding: '15px 0' }}>
+                                    {result && result.testResults ? result.testResults.map((tc, idx) => (
+                                        <div 
+                                            key={idx} 
+                                            onClick={() => setSelectedTestCase(idx)}
+                                            style={{ 
+                                                padding: '10px 15px', 
+                                                cursor: 'pointer', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '8px',
+                                                background: selectedTestCase === idx ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                                                borderRight: selectedTestCase === idx ? '3px solid #6366f1' : '3px solid transparent'
+                                            }}
+                                        >
+                                            {tc.status === 'Skipped' ? <div style={{width: '16px', height: '16px', borderRadius: '50%', border: '2px solid #64748b'}}></div> : 
+                                             tc.passed ? <CheckCircle2 size={16} color="#10b981" /> : <XCircle size={16} color="#ef4444" />}
+                                            <span style={{ color: selectedTestCase === idx ? '#fff' : '#94a3b8', fontSize: '0.9rem' }}>
+                                                {tc.is_hidden ? `Hidden test case ${tc.id}` : `Test case ${tc.id}`}
+                                            </span>
+                                        </div>
+                                    )) : (
+                                        <div style={{ padding: '15px', color: '#64748b', fontSize: '0.9rem' }}>
+                                            {executing ? 'Evaluating test cases...' : 'Run your code to see test case results.'}
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* Detail Pane */}
+                                <div style={{ flex: 1, padding: '20px', overflowY: 'auto', maxHeight: '350px' }}>
+                                    {result && result.testResults && result.testResults[selectedTestCase] && (
+                                        <div>
+                                            {result.testResults[selectedTestCase].status === 'Skipped' ? (
+                                                <div style={{ color: '#64748b', fontStyle: 'italic', marginTop: '20px' }}>This testcase was skipped due to a previous failure.</div>
+                                            ) : (
+                                                <>
+                                                    <div style={{ marginBottom: '20px' }}>
+                                                        <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '8px', fontWeight: 'bold' }}>Input</p>
+                                                        <pre style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '6px', fontSize: '0.9rem', color: '#cbd5e1', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                                                            {result.testResults[selectedTestCase].input}
+                                                        </pre>
+                                                    </div>
+                                                    <div style={{ marginBottom: '20px' }}>
+                                                        <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '8px', fontWeight: 'bold' }}>Expected Output</p>
+                                                        <pre style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '6px', fontSize: '0.9rem', color: '#cbd5e1', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                                                            {result.testResults[selectedTestCase].expected_output}
+                                                        </pre>
+                                                    </div>
+                                                    <div style={{ marginBottom: '20px' }}>
+                                                        <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '8px', fontWeight: 'bold' }}>Your Output</p>
+                                                        <pre style={{ 
+                                                            background: result.testResults[selectedTestCase].passed ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
+                                                            padding: '12px', 
+                                                            borderRadius: '6px', 
+                                                            fontSize: '0.9rem', 
+                                                            color: result.testResults[selectedTestCase].passed ? '#86efac' : '#fca5a5',
+                                                            whiteSpace: 'pre-wrap', 
+                                                            wordBreak: 'break-all'
+                                                        }}>
+                                                            {result.testResults[selectedTestCase].error && result.testResults[selectedTestCase].error !== 'Hidden' ? 
+                                                                result.testResults[selectedTestCase].error : 
+                                                                (result.testResults[selectedTestCase].actual_output || 'No output')}
+                                                        </pre>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                    {!result && !executing && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b' }}>
+                                            <Info size={32} style={{ marginBottom: '15px' }} />
+                                            <p>Submit your code to view detailed test case evaluation.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

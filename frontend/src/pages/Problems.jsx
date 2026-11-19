@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../api/api';
 import { Link } from 'react-router-dom';
-import { Code, Terminal, ChevronRight, Activity, Zap, Star, Trash2, Edit, Plus } from 'lucide-react';
+import { Code, Terminal, ChevronRight, Activity, Zap, Star, Trash2, Edit, Plus, Calendar, Briefcase } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 
@@ -127,7 +127,21 @@ const Problems = () => {
                             </span>
                         </div>
                         
-                        <h3 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#f8fafc', marginBottom: '15px', position: 'relative', zIndex: 1 }}>{prob.title}</h3>
+                        <h3 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#f8fafc', marginBottom: '5px', position: 'relative', zIndex: 1 }}>
+                            {prob.title}
+                            {prob.is_premium && <Star size={16} color="#f59e0b" style={{ marginLeft: '10px' }} title="Premium" />}
+                        </h3>
+                        
+                        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px', color: '#64748b', fontSize: '0.8rem' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Calendar size={12} /> Added: {new Date(prob.created_at).toLocaleDateString()}
+                            </span>
+                            {prob.company_tags && (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b' }}>
+                                    <Briefcase size={12} /> {prob.company_tags.split(',')[0]} {prob.company_tags.split(',').length > 1 ? `+${prob.company_tags.split(',').length - 1}` : ''}
+                                </span>
+                            )}
+                        </div>
                         
                         <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '30px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', flexGrow: 1, position: 'relative', zIndex: 1 }}>
                             {prob.description}
